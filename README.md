@@ -1,5 +1,7 @@
 # Pandemonium! for New Nintendo 3DS
 
+![alt text](https://github.com/littleHatter/Pandemonium-New-3DS-Port/blob/main/screen_pandemonium.png "Screenshot")
+
 A native New Nintendo 3DS adaptation of the N-Gage 2.0 version of **Pandemonium!**, derived from [LeithSilver's MGSM project](https://github.com/LeithSilver/mgsm) and the separate Need for Speed Undercover compatibility work.
 
 Runs the original ARM game through a compatibility runtime. Supports restored backgrounds, save/resume, music and overlapping sound effects, contextual 3DS button prompts, and opening/ending movie playback.
