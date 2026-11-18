@@ -9,7 +9,7 @@ Runs the original ARM game through a compatibility runtime. Supports restored ba
 ## Requirements
 
 - New Nintendo 3DS / New 3DS XL / New Nintendo 2DS XL with a homebrew launcher. Original 3DS models are unsupported.
-- Your own supported Pandemonium N-Gage package.
+- Your own supported Pandemonium N-Gage package. (It MUST be the community-modified "cracked" variant)
 - Python 3.9 or newer and FFmpeg available on PATH to prepare game data. No Python packages are required for extraction.
 
 Game code, game data and converted movies are **not included** in the GitHub source or release archive. The launcher and bottom-screen artwork supplied for this port are included.
