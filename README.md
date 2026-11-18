@@ -40,16 +40,6 @@ The result should contain:
 
 Saves are created in `3ds/pandemonium/user/`. Keep that directory when updating. Need for Speed Undercover uses its own separate directory.
 
-The preparation script verifies the package SHA-256, all 65 embedded installed-file SHA-1 hashes, the unpacked executable and movie source hashes. It preserves the game's original split-volume resources. Only this exact verified package is supported:
-
-```
-f9c62764a984d151c3456d8cfb5256423e83f38736e248e32e584d8b0f1f6fa7
-```
-
-Renaming the package does not affect verification. Different releases/repacked packages are rejected; do not bypass the check without verifying their executable and resources. The tool does not download game files or modify licensing data. It refuses to overwrite an existing `game/` or `video/`; use an empty staging directory when preparing again. It never writes `user/` saves.
-
-Movie conversion uses MPEG-1 video at 25 fps and mono 32 kHz MP2 audio. Output bytes can differ between FFmpeg versions. The tool records conversion settings and hashes locally.
-
 ## Controls
 
 | 3DS input | Function |
