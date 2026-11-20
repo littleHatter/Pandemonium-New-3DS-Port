@@ -38,6 +38,9 @@ The result should contain:
 3ds/pandemonium/video/ending.mpg
 ```
 
+Consider using the automated extractor for preparing your game files if preparing the game data sounds complicated:
+https://github.com/littleHatter/Airplay-New3DS-Game-Data-Preparation-Tool
+
 Saves are created in `3ds/pandemonium/user/`. Keep that directory when updating. Need for Speed Undercover uses its own separate directory.
 
 ## Controls
