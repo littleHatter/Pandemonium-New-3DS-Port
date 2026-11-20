@@ -33,14 +33,11 @@ const devoptab_t* originalError=nullptr;
 const devoptab_t* consoleOutput=nullptr;
 devoptab_t quietOutput{},faultOutput{};
 bool faultConsole=false;
-FILE* logFile=nullptr;
-ssize_t QuietWrite(struct _reent*,void*,const char* text,size_t length){
-    if(logFile)fwrite(text,1,length,logFile);
+ssize_t QuietWrite(struct _reent*,void*,const char*,size_t length){
     return length;
 }
 void ActivateFaultConsole();
 ssize_t FaultWrite(struct _reent* r,void* fd,const char* text,size_t length){
-    if(logFile){fwrite(text,1,length,logFile);fflush(logFile);}
     if(faultConsole&&consoleOutput&&consoleOutput->write_r)consoleOutput->write_r(r,fd,text,length);
     if(faultConsole){gfxFlushBuffers();gfxScreenSwapBuffers(GFX_BOTTOM,false);}
     return length;
@@ -121,11 +118,6 @@ int main(){
     setvbuf(stdout,nullptr,_IONBF,0);setvbuf(stderr,nullptr,_IONBF,0);
     aptSetHomeAllowed(true);DrawBottomArt();gfxFlushBuffers();gspWaitForVBlank();aptHook(&appHookCookie,OnAppEvent,nullptr);
     std::error_code ec;std::filesystem::create_directories(ROOT,ec);
-#ifdef PAN_DIAGNOSTIC_LOG
-    logFile=fopen("sdmc:/3ds/pandemonium/pandemonium.log","wb");
-#endif
-    if(logFile)setvbuf(logFile,nullptr,_IOFBF,32768);
-    printf("[Build] Pandemonium New 3DS release 1.0\n");
     int result=1;bool isNew=false;APT_CheckNew3DS(&isNew);
     try {
     if(!isNew)std::fprintf(stderr,"This application requires a New Nintendo 3DS / New 2DS XL.\n");
@@ -141,13 +133,18 @@ int main(){
                 if(LoadS3E(assets+"/pandemonium.xe3u",binary)&&SetupSandbox(cpu.get(),binary,STOCK_BASE,64u<<20)){
                     bool pointersOK=true;for(const auto& p:binary.pointer_fixups){u32 actual=0;cpu->MemRead(G(binary.base_addr+p.offset),&actual,4);if(actual!=TRAMPOLINE_BASE+p.func_idx*8)pointersOK=false;}
                     printf("[3DS] Type-4 function pointers: %s (%u)\n",pointersOK?"verified":"FAILED",(unsigned)binary.pointer_fixups.size());
+                    if(pointersOK && !EnablePandemoniumMusicInSfx(cpu.get())){
+                        pointersOK=false;
+                        ActivateFaultConsole();
+                        fprintf(stderr,"Unsupported Pandemonium game image.\n");
+                    }
                     if(pointersOK){
                         S3ERuntime runtime(cpu.get(),assets,std::string(ROOT)+"/user");runtime.Init(binary.imports,binary.config);
                         Audio3DS audio;audio.Init();bool suppressAUntilRelease=false;
                         runtime.SetVideoPlayer([&](const std::string& path,const S3ERuntime::VideoRequest& request){
-                            audio.Shutdown();bottomPrompts=1;DrawBottomArt();if(logFile)fflush(logFile);
+                            audio.Shutdown();bottomPrompts=1;DrawBottomArt();
                             int result=1;try{result=PlayPandemoniumMovie(path,request);}catch(const std::exception& e){fprintf(stderr,"[CinematicError] %s\n",e.what());}
-                            bottomPrompts=0;DrawBottomArt();audio.Init();hidScanInput();suppressAUntilRelease=(hidKeysHeld()&KEY_A)!=0;if(logFile)fflush(logFile);
+                            bottomPrompts=0;DrawBottomArt();audio.Init();hidScanInput();suppressAUntilRelease=(hidKeysHeld()&KEY_A)!=0;
                             if(!aptMainLoop())runtime.RequestQuit();
                             return result==0?0:-1;
                         });
@@ -158,10 +155,9 @@ int main(){
                             keys[9]=(held&(KEY_DLEFT|KEY_CPAD_LEFT))!=0;keys[10]=(held&(KEY_DUP|KEY_CPAD_UP))!=0;keys[11]=(held&(KEY_DRIGHT|KEY_CPAD_RIGHT))!=0;keys[12]=(held&(KEY_DDOWN|KEY_CPAD_DOWN))!=0;
                             keys[78]=(held&KEY_A)!=0;keys[210]=(held&KEY_B)!=0;keys[73]=(held&KEY_START)!=0;keys[18]=(held&KEY_X)!=0;keys[13]=(held&KEY_Y)!=0;keys[77]=(held&KEY_L)!=0;keys[22]=(held&KEY_R)!=0;
                         });
-                        runtime.SetFrameCallback([&](uint32_t frame,const uint16_t* pixels,S3ERuntime::Keys&){
+                        runtime.SetFrameCallback([&](uint32_t,const uint16_t* pixels,S3ERuntime::Keys&){
                             const auto prompts=runtime.TakeConsolePrompts();
                             if(!firstGameFrame||prompts!=bottomPrompts){firstGameFrame=true;bottomPrompts=prompts;DrawBottomArt();}
-                            if(frame==1&&logFile)fflush(logFile);
                             u8* screen=gfxGetFramebuffer(GFX_TOP,GFX_LEFT,nullptr,nullptr);memset(screen,0,400*240*3);
                             for(unsigned y=0;y<240;++y)for(unsigned x=0;x<320;++x){u16 p=pixels[y*320+x];u8* out=screen+((x+40)*240+239-y)*3;out[0]=(p&31)*255/31;out[1]=((p>>5)&63)*255/63;out[2]=((p>>11)&31)*255/31;}
                             gfxFlushBuffers();gfxScreenSwapBuffers(GFX_TOP,false);gspWaitForVBlank();
@@ -178,6 +174,6 @@ int main(){
         result=1;ActivateFaultConsole();fprintf(stderr,"[HostFailure] %s\n",e.what());
     }
     if(result!=0){ActivateFaultConsole();std::fprintf(stderr,"\nUnable to continue (runtime result %d).\n",result);WaitAfterError();}
-    fflush(nullptr);if(logFile){fclose(logFile);logFile=nullptr;}devoptab_list[STD_OUT]=originalOutput;devoptab_list[STD_ERR]=originalError;
+    fflush(nullptr);devoptab_list[STD_OUT]=originalOutput;devoptab_list[STD_ERR]=originalError;
     aptUnhook(&appHookCookie);gfxExit();return result;
 }

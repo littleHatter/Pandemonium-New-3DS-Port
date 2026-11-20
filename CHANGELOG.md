@@ -1,3 +1,9 @@
+# 1.1
+
+- SFX mode plays the original MP3 soundtrack alongside sound effects.
+- Homebrew Launcher title and description both read **Pandemonium!**.
+- Removed the New 3DS file logging build option. Fatal errors appear on screen.
+
 # 1.0
 
 - New 3DS ARM execution, original game resources and restored gameplay backgrounds.

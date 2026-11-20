@@ -1,48 +1,14 @@
 {
-  "release": "1.0",
-  "base": "hardware-confirmed Test 4",
-  "changes": [
-    "file logging opt-in",
-    "release build label",
-    "preparation wrapper and documentation"
-  ],
-  "extracted_game_files_compared": 61,
-  "embedded_installed_hashes_verified": 65,
-  "intro_decode": {
-    "width": 176,
-    "height": 144,
-    "fps": 25.0,
-    "rate": 32000,
-    "reported_duration": 91.76,
-    "video_frames": 2298,
-    "video_end": 91.92,
-    "audio_samples": 2932992,
-    "audio_end": 91.656,
-    "unity_gain_clipped_samples": 4,
-    "unity_gain_peak": 1.001287,
-    "decoder_peak_bytes": 532440,
-    "decoder_largest_allocation": 131072,
-    "decoder_reallocations": 0,
-    "decoder_live_after_destroy": 0
-  },
-  "ending_decode": {
-    "width": 176,
-    "height": 144,
-    "fps": 25.0,
-    "rate": 32000,
-    "reported_duration": 99.76,
-    "video_frames": 2510,
-    "video_end": 100.4,
-    "audio_samples": 3203712,
-    "audio_end": 100.116,
-    "unity_gain_clipped_samples": 16,
-    "unity_gain_peak": 1.017006,
-    "decoder_peak_bytes": 532440,
-    "decoder_largest_allocation": 131072,
-    "decoder_reallocations": 0,
-    "decoder_live_after_destroy": 0
-  },
-  "ending_game_trigger_hardware_verified": false,
-  "prepared_data_in_public_archives": false,
-  "build": "devkitARM r68 GCC16.1.0 / libctru2.7.1"
+  "version": "1.1",
+  "hardware_test": "User confirmed simultaneous MP3 and SFX on hardware with Trial 1.",
+  "release_build": "Rebuilt with devkitARM r68 and libctru 2.7.1. Release executable has not been tested on hardware.",
+  "launcher_title_and_description": "Pandemonium!",
+  "embedded_smdh_matches_sidecar": true,
+  "native_file_logging": false,
+  "verified_original_installed_files": 65,
+  "prepared_game_file_count": 61,
+  "movies_reused_from_previous_install": {
+    "3ds/pandemonium/video/ending.mpg": "ce48689e19795b0e9d489e7f6f6feb45072862e734cb243ae35b600f4df10c71",
+    "3ds/pandemonium/video/intro.mpg": "ea993f8a0a1adf4681197dd243f34a7c57eb6120ec825fa0c68ab4820e0484f7"
+  }
 }

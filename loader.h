@@ -45,3 +45,6 @@ bool LoadS3E(const std::string& filepath, S3EBinary& out_bin);
 // Maps and relocates the image at `base` (STOCK_BASE: as linked), the import trampolines, stack, framebuffer and heap.
 // heap_size: 0 = the game's (128 MB, 64 natively, RE_HEAP_MB); a small sandbox (the installer's) passes its own.
 bool SetupSandbox(Cpu* uc, const S3EBinary& bin, uint32_t base = STOCK_BASE, uint32_t heap_size = 0);
+
+// Enable the MP3 selector path when the game is set to SFX.
+bool EnablePandemoniumMusicInSfx(Cpu* cpu);

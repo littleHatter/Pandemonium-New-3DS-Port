@@ -9,10 +9,7 @@ APP_TITLE := Pandemonium!
 APP_DESCRIPTION := Pandemonium!
 APP_AUTHOR := Pandemonium compatibility project
 ARCH := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
-ifeq ($(LOGGING),1)
-LOG_FLAGS := -DPAN_DIAGNOSTIC_LOG
-endif
-CPPFLAGS := $(LOG_FLAGS) -D__3DS__ -I. -I$(CTRULIB)/include -I$(DEVKITPRO)/portlibs/3ds/include
+CPPFLAGS := -D__3DS__ -I. -I$(CTRULIB)/include -I$(DEVKITPRO)/portlibs/3ds/include
 CFLAGS := -O2 -g -Wall -Wno-unused-parameter -mword-relocations -ffunction-sections $(ARCH) $(CPPFLAGS)
 CXXFLAGS := $(CFLAGS) -std=gnu++17 -Wno-psabi
 LDFLAGS := -specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(BUILD)/$(TARGET).map -Wl,--gc-sections

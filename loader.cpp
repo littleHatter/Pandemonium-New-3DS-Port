@@ -189,3 +189,22 @@ bool SetupSandbox(Cpu* uc, const S3EBinary& bin, uint32_t base, uint32_t heap_si
               << STACK_BASE << ", framebuffer 0x" << FB_BASE << ", heap 0x" << HEAP_BASE << std::dec << " (" << HEAP_SIZE / (1024 * 1024) << " MB)" << std::endl;
     return true;
 }
+
+bool EnablePandemoniumMusicInSfx(Cpu* cpu) {
+    // ARM dispatch at 0x4a011cd8 indexes this table with the current audio mode.
+    // Change only the SFX destination. The saved mode and effects checks stay intact.
+    constexpr uint32_t dispatch = 0x4a011cd8;
+    constexpr uint32_t sfxSlot = 0x4a011ce4;
+    constexpr uint32_t mp3Slot = 0x4a011cf0;
+    uint32_t instruction = 0;
+    uint32_t sfxTarget = 0;
+    uint32_t mp3Target = 0;
+    if (cpu->MemRead(G(dispatch), &instruction, sizeof(instruction)) != Cpu::OK ||
+        cpu->MemRead(G(sfxSlot), &sfxTarget, sizeof(sfxTarget)) != Cpu::OK ||
+        cpu->MemRead(G(mp3Slot), &mp3Target, sizeof(mp3Target)) != Cpu::OK ||
+        instruction != 0x379ff101 || sfxTarget != G(0x4a011cf8) ||
+        mp3Target != G(0x4a011dd4)) {
+        return false;
+    }
+    return cpu->MemWrite(G(sfxSlot), &mp3Target, sizeof(mp3Target)) == Cpu::OK;
+}
