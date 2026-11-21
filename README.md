@@ -1,6 +1,6 @@
 # Pandemonium! for New Nintendo 3DS
 
-![alt text](https://github.com/littleHatter/Pandemonium-New-3DS-Port/blob/main/screen_pandemonium.png "Screenshot")
+![alt text](https://github.com/littleHatter/Pandemonium-New-3DS-Port/blob/main/screen_pandemonium.png "Screenshot") ![alt text](https://github.com/littleHatter/Pandemonium-New-3DS-Port/blob/main/screen.png "widescreenshot")
 
 A native New Nintendo 3DS adaptation of the N-Gage 2.0 version of **Pandemonium!**, derived from [LeithSilver's MGSM project](https://github.com/LeithSilver/mgsm) and the separate Need for Speed Undercover compatibility work.
 
