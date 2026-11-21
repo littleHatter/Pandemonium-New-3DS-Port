@@ -17,6 +17,11 @@ S3ERuntime::VideoRequest displayRequest{};
 '''+function+'''
 int main(){std::vector<uint8_t> rgb(176*144*3,177);
 for(auto request:{S3ERuntime::VideoRequest{1,59,3,201,165,256},{1,0,0,320,240,256},{1,0xffffffffu,0xffffffffu,201,165,256},{1,319,239,100,100,256},{1,0,0,0,0,256}}){displayRequest=request;memset(output,0xa5,sizeof(output));Present(rgb.data(),176,144);for(int i=0;i<16;++i){assert(output[i]==0xa5);assert(output[16+400*240*3+i]==0xa5);}}
+displayRequest={1,99,3,201,165,256,400};Present(rgb.data(),176,144);
+auto pixel=[](unsigned x,unsigned y){return output[16+(x*240+239-y)*3];};
+assert(pixel(98,3)==0 && pixel(99,3)==177 && pixel(299,3)==177 && pixel(300,3)==0);
+displayRequest={1,59,3,201,165,256,320};Present(rgb.data(),176,144);
+assert(pixel(98,3)==0 && pixel(99,3)==177 && pixel(299,3)==177 && pixel(300,3)==0);
 }
 '''
 with tempfile.TemporaryDirectory() as temp:

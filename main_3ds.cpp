@@ -12,6 +12,7 @@
 #include "audio_gain.h"
 #include "bottom_art.h"
 #include "movie_player.h"
+#include "display_toggle_art.h"
 
 u32 __stacksize__=1024*1024;
 u32 __ctru_heap_size=24*1024*1024;
@@ -49,7 +50,8 @@ void ActivateFaultConsole(){
     }
     consoleSelect(&console);
 }
-uint32_t bottomPrompts=0;bool firstGameFrame=false;
+uint32_t bottomPrompts=0;bool firstGameFrame=false,wideMode=false,movieActive=false;
+constexpr unsigned kToggleTop=240-kToggleHeight;
 void DrawBottomArt(){
     if(faultConsole)return;
     u16* screen=reinterpret_cast<u16*>(gfxGetFramebuffer(GFX_BOTTOM,GFX_LEFT,nullptr,nullptr));memcpy(screen,kBottomArt,sizeof(kBottomArt));
@@ -66,6 +68,7 @@ void DrawBottomArt(){
     if(bottomPrompts&2)blit(kStartArt,160,17,83,0);
     if(bottomPrompts&8)blit(kB2Art,77,17,243,0);else if(bottomPrompts&4)blit(kBArt,77,17,243,0);
     if(!firstGameFrame)blit(kLoadingArt,38,8,282,232);
+    if(firstGameFrame&&!movieActive)blit(wideMode?kSwitchToStandard:kSwitchToWide,kToggleWidth,kToggleHeight,0,kToggleTop);
     static_assert(sizeof(kBottomArt)==320*240*2,"Bottom artwork must match RGB565 framebuffer");
     GSPGPU_FlushDataCache(screen,sizeof(kBottomArt));
 }
@@ -142,9 +145,9 @@ int main(){
                         S3ERuntime runtime(cpu.get(),assets,std::string(ROOT)+"/user");runtime.Init(binary.imports,binary.config);
                         Audio3DS audio;audio.Init();bool suppressAUntilRelease=false;
                         runtime.SetVideoPlayer([&](const std::string& path,const S3ERuntime::VideoRequest& request){
-                            audio.Shutdown();bottomPrompts=1;DrawBottomArt();
+                            audio.Shutdown();movieActive=true;bottomPrompts=1;DrawBottomArt();
                             int result=1;try{result=PlayPandemoniumMovie(path,request);}catch(const std::exception& e){fprintf(stderr,"[CinematicError] %s\n",e.what());}
-                            bottomPrompts=0;DrawBottomArt();audio.Init();hidScanInput();suppressAUntilRelease=(hidKeysHeld()&KEY_A)!=0;
+                            movieActive=false;bottomPrompts=0;DrawBottomArt();audio.Init();hidScanInput();suppressAUntilRelease=(hidKeysHeld()&KEY_A)!=0;
                             if(!aptMainLoop())runtime.RequestQuit();
                             return result==0?0:-1;
                         });
@@ -152,14 +155,23 @@ int main(){
                         puts("D-pad / Circle Pad: directions\nA: CENTER / confirm\nB: right soft key / back\nSTART: pause\nX: keypad 5; Y: keypad 0; L: character switch; R: keypad 9\n");
                         runtime.SetPollCallback([&](S3ERuntime::Keys& keys){
                             keys.fill(false);if(!aptMainLoop()){runtime.RequestQuit();return;}hidScanInput();u32 held=hidKeysHeld();if(suppressAUntilRelease){if(!(held&KEY_A))suppressAUntilRelease=false;held&=~KEY_A;}
+                            if(firstGameFrame&&!movieActive&&(hidKeysDown()&KEY_TOUCH)){
+                                touchPosition touch{};
+                                hidTouchRead(&touch);
+                                if(touch.px<kToggleWidth&&touch.py>=kToggleTop&&touch.py<240)
+                                    runtime.RequestDisplayToggle();
+                            }
                             keys[9]=(held&(KEY_DLEFT|KEY_CPAD_LEFT))!=0;keys[10]=(held&(KEY_DUP|KEY_CPAD_UP))!=0;keys[11]=(held&(KEY_DRIGHT|KEY_CPAD_RIGHT))!=0;keys[12]=(held&(KEY_DDOWN|KEY_CPAD_DOWN))!=0;
                             keys[78]=(held&KEY_A)!=0;keys[210]=(held&KEY_B)!=0;keys[73]=(held&KEY_START)!=0;keys[18]=(held&KEY_X)!=0;keys[13]=(held&KEY_Y)!=0;keys[77]=(held&KEY_L)!=0;keys[22]=(held&KEY_R)!=0;
                         });
                         runtime.SetFrameCallback([&](uint32_t,const uint16_t* pixels,S3ERuntime::Keys&){
                             const auto prompts=runtime.TakeConsolePrompts();
-                            if(!firstGameFrame||prompts!=bottomPrompts){firstGameFrame=true;bottomPrompts=prompts;DrawBottomArt();}
-                            u8* screen=gfxGetFramebuffer(GFX_TOP,GFX_LEFT,nullptr,nullptr);memset(screen,0,400*240*3);
-                            for(unsigned y=0;y<240;++y)for(unsigned x=0;x<320;++x){u16 p=pixels[y*320+x];u8* out=screen+((x+40)*240+239-y)*3;out[0]=(p&31)*255/31;out[1]=((p>>5)&63)*255/63;out[2]=((p>>11)&31)*255/31;}
+                            const unsigned width=runtime.SurfaceWidth();
+                            if(!firstGameFrame||prompts!=bottomPrompts||wideMode!=(width==400)){
+                                firstGameFrame=true;bottomPrompts=prompts;wideMode=width==400;DrawBottomArt();
+                            }
+                            u8* screen=gfxGetFramebuffer(GFX_TOP,GFX_LEFT,nullptr,nullptr);const unsigned left=(400-width)/2;if(left)memset(screen,0,400*240*3);
+                            for(unsigned y=0;y<240;++y)for(unsigned x=0;x<width;++x){u16 p=pixels[y*width+x];u8* out=screen+((x+left)*240+239-y)*3;out[0]=(p&31)*255/31;out[1]=((p>>5)&63)*255/63;out[2]=((p>>11)&31)*255/31;}
                             gfxFlushBuffers();gfxScreenSwapBuffers(GFX_TOP,false);gspWaitForVBlank();
                         });
                         result=runtime.Run(G(binary.entry_point));if(runtime.Failed())result=1;

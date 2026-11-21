@@ -1,3 +1,9 @@
+# 1.2
+
+- Tap the bottom-left touchscreen icon to switch between Standard (320×240) and Wide (400×240) during play.
+- Render both background tile passes at the active width to eliminate scrolling smears and edge corruption.
+- Promoted hardware-tested Live Display Toggle Test 4.
+
 # 1.1
 
 - SFX mode plays the original MP3 soundtrack alongside sound effects.

@@ -212,6 +212,70 @@ struct S3ERuntime::Impl {
     U ms(){return static_cast<U>(NfsClockMs()-start);}
     bool suspendAndStop=false;
     void pollHost(bool force=false){U now=ms();if(poll&&(force||U(now-lastPoll)>=16)){lastPoll=now;poll(desired);}if(periodicLogging&&U(now-lastHeartbeat)>=5000){lastHeartbeat=now;std::fprintf(stdout,"[S3E] Heartbeat ms=%lu frame=%lu calls=%llu callbacks=%lu\n",(unsigned long)now,(unsigned long)frames,(unsigned long long)calls,(unsigned long)tasks.size());}}
+    static constexpr U backgroundSurfaceCaller=0x4a01205c;
+    static constexpr U backgroundStateLiteral=0x4a0129cc;
+    static constexpr U backgroundBlitEnd=0x4a0129bc;
+    bool backgroundNeedsRightEdge=false;
+    bool reserveWideBackgroundTiles(){
+        // Level setup can run in Standard and the next frame can submit Wide tiles.
+        constexpr U tileTableWidthLoad=0x4a00ffa4;
+        U instruction=0;
+        if(cpu->MemRead(G(tileTableWidthLoad),&instruction,4)!=Cpu::OK||instruction!=0xe5901210)return false;
+        if(cpu->MemRead(G(backgroundStateLiteral),&instruction,4)!=Cpu::OK||instruction!=G(0x4a0a4b3c))return false;
+        if(cpu->MemRead(G(backgroundBlitEnd),&instruction,4)!=Cpu::OK||instruction!=0xe8bd4ff0)return false;
+        if(cpu->AddCodeHook([](Cpu* cpu,uint64_t address,uint32_t,void*){
+            const U width=400;
+            const U next=static_cast<U>(address)+4;
+            cpu->RegWrite(1,&width);
+            cpu->RegWrite(Cpu::REG_PC,&next);
+        },this,G(tileTableWidthLoad),G(tileTableWidthLoad))!=Cpu::OK)return false;
+        return cpu->AddCodeHook([](Cpu*,uint64_t,uint32_t,void* self){
+            auto& runtime=*static_cast<Impl*>(self);
+            if(!runtime.backgroundNeedsRightEdge)return;
+            runtime.backgroundNeedsRightEdge=false;
+            // The original tail loop skips a one-pixel remainder. Extend the
+            // adjacent column before GX draws the rest of the frame.
+            for(unsigned y=0;y<240;++y){
+                const U source=FB_BASE+2*(y*400+398);
+                uint16_t pixel=0;
+                runtime.rd(source,&pixel,2);
+                runtime.wr(source+2,&pixel,2);
+            }
+        },this,G(backgroundBlitEnd),G(backgroundBlitEnd))==Cpu::OK;
+    }
+    std::vector<std::pair<U,U>> surfaceCallbacks;
+    unsigned surfaceWidth = 320;
+#ifndef __3DS__
+    void SetProbeWidth(){if(getenv("PAN_WIDE"))surfaceWidth=400;}
+#endif
+    bool surfaceToggleRequested=false;
+    void notifySurface(const std::shared_ptr<std::vector<std::pair<U,U>>>& callbacks, size_t at, U event){
+        if(at==callbacks->size()){
+            heap.Free(event);
+            finish(0);
+            return;
+        }
+        const auto [fn,user]=(*callbacks)[at];
+        call(fn,{event,user},[this,callbacks,at,event](U result){
+            (void)result;
+            notifySurface(callbacks,at+1,event);
+        });
+    }
+    bool switchSurface(){
+        if(!surfaceToggleRequested)return false;
+        surfaceToggleRequested=false;
+        if(surfaceCallbacks.empty()){
+            surfaceWidth=surfaceWidth==320?400:320;
+            return false;
+        }
+        U event=alloc(20);
+        if(!event)return false;
+        surfaceWidth=surfaceWidth==320?400:320;
+        const U change[]={1,surfaceWidth,240,0,2*surfaceWidth};
+        wr(event,change,sizeof(change));
+        notifySurface(std::make_shared<std::vector<std::pair<U,U>>>(surfaceCallbacks),0,event);
+        return true;
+    }
     void svc(U index){if((++pollCounter&63u)==0)pollHost();if(quit){finish(0);cpu->Stop();return;}if(index==imports.size()){returned();return;}if(index>=imports.size()){fatal("invalid service index");return;}++calls;const std::string& n=imports[index];if(seen.insert(n).second)std::fprintf(stdout,"[S3E] Startup import %llu: %s\n",(unsigned long long)calls,n.c_str());R r{reg(0),reg(1),reg(2),reg(3)};if(getenv("NFS_DIAG")&&(n=="s3eKeyboardGetInt"||n=="s3ePointerGetInt"||n=="s3eMemorySetUserMemMgr"))fprintf(stderr,"[Capability] %s a0=%u a1=%08x a2=%08x\n",n.c_str(),r[0],r[1],r[2]);if(getenv("PAN_IMPORT_TRACE"))fprintf(stderr,"[Import] call=%llu name=%s lr=%08x sp=%08x args=%08x,%08x,%08x,%08x\n",(unsigned long long)calls,n.c_str(),reg(Cpu::REG_LR),reg(Cpu::REG_SP),r[0],r[1],r[2],r[3]);auto done=[this](U x){finish(x);};
         if(n=="s3eMemorySetInt"){fprintf(stderr,"[CapabilityUnavailable] s3eMemorySetInt property=%u value=%u\n",r[0],r[1]);finish(1);return;}
         // This guest uses secondary heap 1 only as a lifecycle token around video.
@@ -235,16 +299,40 @@ struct S3ERuntime::Impl {
         if(n=="s3eDeviceUnRegister"){deviceCallbacks.erase(r[0]);finish(0);return;}
         if(n=="s3eDeviceCheckQuitRequest"){finish(quit);return;}
         if(n=="s3eDeviceExit"||n=="s3eDeviceRequestQuit"){finish(0);quit=true;cpu->Stop();return;}
+        if(n=="s3eSurfaceRegister"){
+#ifndef __3DS__
+            fprintf(stderr,"[SurfaceRegister] event=%u fn=%08x\n",unsigned(r[0]),unsigned(r[1]));
+#endif
+            if(r[0]==1&&r[1])surfaceCallbacks.emplace_back(r[1],r[2]);
+            finish(0);return;
+        }
+        if(n=="s3eSurfaceUnRegister"){if(r[0]==1)surfaceCallbacks.erase(std::remove_if(surfaceCallbacks.begin(),surfaceCallbacks.end(),[&](const auto& cb){return cb.first==r[1];}),surfaceCallbacks.end());finish(0);return;}
         if(n=="s3eSurfaceGetInt"){
-            // The direct background blitter queries property 7 at 0x4A012064
-            // and divides the byte pitch by two for RGB565 row stepping.
-            // It shares the unrotated 320x240 framebuffer with the GX renderer.
-            U value=r[0]==0?320:r[0]==1?240:(r[0]==2||r[0]==7)?640:r[0]==8?1:0;
+            const unsigned width=surfaceWidth;
+            U value=r[0]==0?width:r[0]==1?240:(r[0]==2||r[0]==7)?2*width:r[0]==8?1:0;
             if(getenv("PAN_SURFACE_TRACE")){static std::set<U> observed;if(observed.insert(r[0]).second)fprintf(stderr,"[Surface] property=%u value=%u lr=%08x\n",r[0],value,reg(Cpu::REG_LR));}
             finish(value);return;
         }
-        if(n=="s3eSurfacePtr"){finish(FB_BASE);return;}
-        if(n=="s3eSurfaceShow"){++frames;measureFrame();std::vector<uint16_t> image(320*240);rd(FB_BASE,image.data(),image.size()*2);if(present)present(frames,image.data(),desired);if(periodicLogging&&(frames==1||frames%300==0))std::fprintf(stdout,"[S3E] Frame %lu; heap %lu KB; calls %llu\n",(unsigned long)frames,(unsigned long)(heap.BytesInUse()/1024),(unsigned long long)calls);finish(0);if(limit&&frames>=limit){quit=true;cpu->Stop();}return;}
+        if(n=="s3eSurfacePtr"){
+            if((reg(Cpu::REG_LR)&~1u)==G(backgroundSurfaceCaller)){
+                // The landscape blitter caches its row step even across a mode
+                // switch. Refresh it before the software tiles share the GX surface.
+                const U state=G(0x4a0a4b3c);
+                U orientation=0;
+                rd(state+0x50,&orientation,4);
+                if(orientation==0){
+                    const U rowStep=surfaceWidth;
+                    wr(state+0x48,&rowStep,4);
+                    if(surfaceWidth==400){
+                        U leadingTilePixels=0;
+                        rd(state+0x28,&leadingTilePixels,4);
+                        backgroundNeedsRightEdge=leadingTilePixels==15;
+                    }
+                }
+            }
+            finish(FB_BASE);return;
+        }
+        if(n=="s3eSurfaceShow"){++frames;measureFrame();std::vector<uint16_t> image(surfaceWidth*240);rd(FB_BASE,image.data(),image.size()*2);if(present)present(frames,image.data(),desired);if(periodicLogging&&(frames==1||frames%300==0))std::fprintf(stdout,"[S3E] Frame %lu; heap %lu KB; calls %llu\n",(unsigned long)frames,(unsigned long)(heap.BytesInUse()/1024),(unsigned long long)calls);if(!quit&&(!limit||frames<limit)&&switchSurface())return;finish(0);if(limit&&frames>=limit){quit=true;cpu->Stop();}return;}
         if(n=="s3ePointerRegister"){pointerCallbacks[r[0]]={r[1],r[2]};finish(0);return;}
         if(n=="s3ePointerUnRegister"){pointerCallbacks.erase(r[0]);finish(0);return;}
         if(n=="s3eKeyboardRegister"){keyCallbacks[r[0]]={r[1],r[2]};finish(0);return;}if(n=="s3eKeyboardUnRegister"){keyCallbacks.erase(r[0]);finish(0);return;}
@@ -301,7 +389,7 @@ struct S3ERuntime::Impl {
             if(r[1]==659333&&crc==0xd4e821f9)clip="intro.mpg";
             if(r[1]==730362&&crc==0x2ac860c3)clip="ending.mpg";
             if(clip.empty()){fprintf(stderr,"[VideoUnknown] bytes=%u crc=%08x\n",r[1],crc);finish(1);return;}
-            videoRequest={r[2],r[3],word(reg(13)),word(reg(13)+4),word(reg(13)+8),videoVolume};
+            videoRequest={r[2],r[3],word(reg(13)),word(reg(13)+4),word(reg(13)+8),videoVolume,surfaceWidth};
             videoPath=assets+"/../video/"+clip;videoPlaying=videoPending=true;finish(0);return;
         }
         if(n=="s3eVideoSetInt"){if(r[0]!=0){finish(1);return;}videoVolume=std::min<U>(r[1],256);finish(0);return;}
@@ -375,13 +463,17 @@ struct S3ERuntime::Impl {
             svcSleepThread(r[0]?1000000:0);
 #endif
             pumpAudio([this](U){finish(0);});return;}
-        static const std::set<std::string> noops={"s3eDeviceCheckPauseRequest","s3eDeviceBacklightOn","s3eSurfaceSetup","s3eSurfaceRegister","s3eSurfaceUnRegister","s3eSoundSetInt","s3eAudioSetInt","s3eSoundChannelRegister","s3eSoundChannelUnRegister","s3eAudioRegister","s3eVibraGetInt","s3eVibraSetInt","s3eVibraVibrate","s3eVibraStop"};
+        static const std::set<std::string> noops={"s3eDeviceCheckPauseRequest","s3eDeviceBacklightOn","s3eSurfaceSetup","s3eSoundSetInt","s3eAudioSetInt","s3eSoundChannelRegister","s3eSoundChannelUnRegister","s3eAudioRegister","s3eVibraGetInt","s3eVibraSetInt","s3eVibraVibrate","s3eVibraStop"};
         if(noops.count(n)){finish(0);return;}fatal("unsupported import "+n+" caller "+std::to_string(reg(Cpu::REG_LR)));
     }
 };
 S3ERuntime::S3ERuntime(Cpu* c,const std::string&a,const std::string&s):p(new Impl(c,a,s)){}
 S3ERuntime::~S3ERuntime()=default;
-void S3ERuntime::Init(const std::vector<std::string>& i,const std::string& c){p->imports=i;p->parse(c);
+void S3ERuntime::Init(const std::vector<std::string>& i,const std::string& c){
+#ifndef __3DS__
+    p->SetProbeWidth();
+#endif
+p->imports=i;p->parse(c);
 #ifdef __3DS__
     const bool consoleUi=true;
 #else
@@ -395,9 +487,12 @@ void S3ERuntime::SetAudioCallback(std::function<void(const int16_t*,size_t,U)> f
 void S3ERuntime::SetChannelAudioCallback(std::function<void(U,const int16_t*,size_t,U)> f){p->audioStemOut=std::move(f);}
 void S3ERuntime::RequestQuit(){p->quit=true;p->cpu->Stop();}
 void S3ERuntime::RequestSuspendAndStop(){p->suspendAndStop=true;}
-int S3ERuntime::Run(U e,U limit){p->limit=limit;int err=p->cpu->Start(e,0xDEADBEEF,getenv("PAN_INSTRUCTION_LIMIT")?std::strtoull(getenv("PAN_INSTRUCTION_LIMIT"),nullptr,0):0);p->reportPerformance();std::fprintf(stdout,"[S3E] End: error=%d failed=%d frame=%lu heap peak=%lu KB\n",err,p->failed,(unsigned long)p->frames,(unsigned long)(p->heap.PeakInUse()/1024));return err?err:p->failed?1:0;}
+int S3ERuntime::Run(U e,U limit){if(!p->reserveWideBackgroundTiles()){fprintf(stderr,"Unsupported background blitter.\n");return 1;}p->limit=limit;int err=p->cpu->Start(e,0xDEADBEEF,getenv("PAN_INSTRUCTION_LIMIT")?std::strtoull(getenv("PAN_INSTRUCTION_LIMIT"),nullptr,0):0);p->reportPerformance();std::fprintf(stdout,"[S3E] End: error=%d failed=%d frame=%lu heap peak=%lu KB\n",err,p->failed,(unsigned long)p->frames,(unsigned long)(p->heap.PeakInUse()/1024));return err?err:p->failed?1:0;}
 uint32_t S3ERuntime::Frames()const{return p->frames;}bool S3ERuntime::Failed()const{return p->failed;}
 
 uint32_t S3ERuntime::TakeConsolePrompts(){return p->consoleUi.Take();}
 
 void S3ERuntime::SetVideoPlayer(VideoPlayer player){p->videoPlayer=std::move(player);}
+
+unsigned S3ERuntime::SurfaceWidth() const {return p->surfaceWidth;}
+void S3ERuntime::RequestDisplayToggle(){p->surfaceToggleRequested=true;}

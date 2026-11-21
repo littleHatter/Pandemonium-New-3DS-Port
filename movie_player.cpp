@@ -54,8 +54,9 @@ struct Lifecycle {Audio* audio=nullptr;bool paused=false,refresh=true;uint64_t p
 };
 void AppEvent(APT_HookType event,void* ptr){auto& s=*static_cast<Lifecycle*>(ptr);if(event==APTHOOK_ONSUSPEND||event==APTHOOK_ONSLEEP)s.Pause(true);if(event==APTHOOK_ONRESTORE||event==APTHOOK_ONWAKEUP)s.Pause(false);}
 class AptHookGuard{aptHookCookie cookie;bool active=true;public:explicit AptHookGuard(Lifecycle* state){aptHook(&cookie,AppEvent,state);}void Reset(){if(active){aptUnhook(&cookie);active=false;}}~AptHookGuard(){Reset();}};
-void Present(const uint8_t* rgb,unsigned w,unsigned h){u8* screen=gfxGetFramebuffer(GFX_TOP,GFX_LEFT,nullptr,nullptr);memset(screen,0,400*240*3);unsigned left=40+displayRequest.left,top=displayRequest.top,dw=displayRequest.width,dh=displayRequest.height;
- if(!dw||!dh||displayRequest.left>320||displayRequest.top>240||dw>320-displayRequest.left||dh>240-displayRequest.top){left=(400-w)/2;top=(240-h)/2;dw=w;dh=h;}
+void Present(const uint8_t* rgb,unsigned w,unsigned h){u8* screen=gfxGetFramebuffer(GFX_TOP,GFX_LEFT,nullptr,nullptr);memset(screen,0,400*240*3);const unsigned canvas=displayRequest.canvasWidth==400?400:320;
+ unsigned left=(400-canvas)/2+displayRequest.left,top=displayRequest.top,dw=displayRequest.width,dh=displayRequest.height;
+ if(!dw||!dh||displayRequest.left>canvas||displayRequest.top>240||dw>canvas-displayRequest.left||dh>240-displayRequest.top){left=(400-w)/2;top=(240-h)/2;dw=w;dh=h;}
  for(unsigned y=0;y<dh;++y)for(unsigned x=0;x<dw;++x){const auto* p=rgb+3*((y*h/dh)*w+x*w/dw);auto* out=screen+((left+x)*240+239-top-y)*3;out[0]=p[2];out[1]=p[1];out[2]=p[0];}
 
  GSPGPU_FlushDataCache(screen,400*240*3);gfxScreenSwapBuffers(GFX_TOP,false);

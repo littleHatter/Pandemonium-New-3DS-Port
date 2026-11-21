@@ -28,6 +28,10 @@ $(BUILD):
 $(BUILD)/main_3ds.o: bottom_art.h
 bottom_art.h: generate_art.py $(wildcard artwork/*.png)
 	python3 generate_art.py
+$(BUILD)/main_3ds.o: display_toggle_art.h
+display_toggle_art.h: artwork/Switch_to_Wide.png artwork/Switch_to_Standard.png generate_display_toggle.py
+	python3 generate_display_toggle.py
+
 $(BUILD)/%.o: %.cpp | $(BUILD)
 	$(CXX) -MMD -MP $(CXXFLAGS) -c $< -o $@
 $(BUILD)/native_arm.o: native_arm.S | $(BUILD)

@@ -15,7 +15,7 @@ public:
     void SetPollCallback(std::function<void(Keys&)> fn);
     void SetAudioCallback(std::function<void(const int16_t*,size_t,uint32_t)> fn);
     void SetChannelAudioCallback(std::function<void(uint32_t,const int16_t*,size_t,uint32_t)> fn);
-    struct VideoRequest {uint32_t repeat,left,top,width,height,volume;};
+    struct VideoRequest {uint32_t repeat,left,top,width,height,volume;uint32_t canvasWidth=320;};
     using VideoPlayer=std::function<int(const std::string&,const VideoRequest&)>;
     void SetVideoPlayer(VideoPlayer player);
     void RequestQuit();
@@ -23,6 +23,8 @@ public:
     void RequestSuspendAndStop();
     int Run(uint32_t entry,uint32_t maxFrames=0);
     uint32_t Frames() const;
+    unsigned SurfaceWidth() const;
+    void RequestDisplayToggle();
     uint32_t TakeConsolePrompts();
     bool Failed() const;
 private:

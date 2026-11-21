@@ -1,7 +1,7 @@
 {
-  "version": "1.1",
-  "hardware_test": "User confirmed simultaneous MP3 and SFX on hardware with Trial 1.",
-  "release_build": "Rebuilt with devkitARM r68 and libctru 2.7.1. Release executable has not been tested on hardware.",
+  "version": "1.2",
+  "hardware_test": "User confirmed Test 4 resolves the scrolling background artifacts on New 3DS hardware.",
+  "release_build": "Packaged the exact hardware-tested Test 4 executable and SMDH.",
   "launcher_title_and_description": "Pandemonium!",
   "embedded_smdh_matches_sidecar": true,
   "native_file_logging": false,
@@ -10,5 +10,7 @@
   "movies_reused_from_previous_install": {
     "3ds/pandemonium/video/ending.mpg": "ce48689e19795b0e9d489e7f6f6feb45072862e734cb243ae35b600f4df10c71",
     "3ds/pandemonium/video/intro.mpg": "ea993f8a0a1adf4681197dd243f34a7c57eb6120ec825fa0c68ab4820e0484f7"
-  }
+  },
+  "test_build": "Live Display Toggle Test 4",
+  "test_build_hardware": "Passed"
 }
